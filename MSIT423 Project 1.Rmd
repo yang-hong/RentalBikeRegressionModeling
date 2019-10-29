@@ -1,0 +1,141 @@
+---
+title: Project 1
+subtitle: |
+    | MSIT 423, Spring 2019
+    | Due: April 27, 2:00pm
+author: Jessica Qin, Yang Hong, Yunzi Zhang, Yifan Chen, Ray Liu
+output: 
+  pdf_document:
+    number_sections: true
+  html_document:
+    keep_md: true
+fontsize: 11pt
+geometry: "left=1.2in, right=1.2in, top=1in, bottom=1in"
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(car)
+library(corrplot)
+```
+## Loading the data from the csv file
+
+```{r}
+bike<-read.csv("~/Desktop/MSIT 423/Project/bike.csv")
+# head(bike)
+```
+
+## Explore the relationship between the number of trips and the convenience of the location.
+There are three variables that can be used to analyze the convenience level of the location, including CTA_BUS_STATIONS, CTA_TRAIN_STATIONS and PARK_AREA_ACRES.
+
+```{r}
+fit=lm(trips~bike$CTA_BUS_STATIONS + bike$CTA_TRAIN_STATIONS 
+       + bike$PARK_AREA_ACRES, bike)
+par(mfrow=c(2,2))
+plot(fit)
+```
+From the graphs, there may be some multicollinearity across the variables. Check the variance inflation factor.
+From the Q-Q plot, the normality condition may be violated. However, since the sample size is large, we don't need to worry about it because of the Central Limit Theorem.
+
+```{r}
+vif(fit)
+```
+The VIF values for CTA_BUS_STATIONS and CTA_TRAIN_STATIONS are high, suggesting confounding effects. Check the correlation between CTA_BUS_STATIONS and CTA_TRAIN_STATIONS.
+
+```{r}
+cor(bike$CTA_BUS_STATIONS, bike$CTA_TRAIN_STATIONS)
+```
+We see that CTA_BUS_STATIONS and CTA_TRAIN_STATIONS are strong positively correlated.
+
+```{r}
+summary(fit)
+```
+From the summary above, we see that both CTA_TRAIN_STATIONS and PARK_AREA_ACRES are significant variables. We omit CTA_BUS_STATIONS for now.
+
+## Explore the relationship between bike demand and the crime variables
+Next, we explore the relationships between the 9 crime types including theft, battery, deceptive practice, assault, burglary, robbery, criminal trespassing, narcotics, and homicide.
+```{r}
+fit_crime <- lm(bike$trips ~ bike$THEFT+bike$BATTERY+bike$DECEPTIVE_PRACTICE
+                +bike$DECEPTIVE_PRACTICE+bike$ASSAULT+bike$BURGLARY
+                +bike$ROBBERY+bike$CRIMINAL_TRESPASS+bike$NARCOTICS+bike$HOMICIDE)
+summary(fit_crime)
+```
+From the regression summary, we see that only THEFT, DECEPTIVE_PRACTICE, ASSULT, BURGLARY and ROBBERY are significant variables. Next we look at the correlations between the variables.
+```{r}
+my_data <- bike[, c(15,17,22,40,43)]
+pairs(my_data)
+source("http://www.sthda.com/upload/rquery_cormat.r")
+rquery.cormat(my_data)
+```
+From the correlation matrix, it is explict that there are some highly correlated variables. To name just a few,
+DECEPTIVE_PRACTICE and THEFT has a correlation value of 0.95 which means that they are highly correlated with each 
+other and ROBBERY correlated with ASSAULT with a value of 0.85.
+
+```{r}
+fit_5crime <- lm(bike$trips ~ bike$THEFT
+                +bike$DECEPTIVE_PRACTICE+bike$ASSAULT+bike$BURGLARY
+                +bike$ROBBERY)
+summary(fit_5crime)
+```
+
+```{r}
+vif(fit_5crime)
+```
+
+We see that the VIF for THEFT and DECEPTIVE_PRACTICE are very high, almost a linear combination of the other variables, and we know that they are strongly correlated from the correlation analysis performed above. We remove DESCEPTIVE_PRACTICE.
+
+```{r}
+fit_4crime <- lm(bike$trips ~ bike$THEFT+bike$ASSAULT+bike$BURGLARY
+                +bike$ROBBERY)
+summary(fit_4crime)
+```
+
+```{r}
+vif(fit_4crime)
+```
+
+```{r}
+fit_all <- lm(bike$trips ~ bike$THEFT+bike$ASSAULT+bike$BURGLARY
+                +bike$ROBBERY+bike$PARK_AREA_ACRES+bike$CTA_TRAIN_STATIONS)
+summary(fit_all)
+par(mfrow=c(2,2))
+plot(fit_all)
+```
+The ROBBERY variable becomes insignificant, we omit it for now.
+
+## Derive composite variables for analysis
+
+```{r}
+model <- lm(bike$trips ~  bike$CTA_BUS_STATIONS + bike$CTA_TRAIN_STATIONS
+            + bike$PARK_AREA_ACRES)
+beta_x1 <- summary(model)$coefficients[2, 1]
+beta_x2 <- summary(model)$coefficients[3, 1]
+beta_x3 <- summary(model)$coefficients[4, 1]
+CBD1 <- beta_x1*bike$CTA_BUS_STATIONS+
+  beta_x2*bike$CTA_TRAIN_STATIONS+
+  beta_x3 * bike$PARK_AREA_ACRES
+```
+
+```{r}
+model2 <- lm(bike$trips ~  bike$Limited_Business_License
+             +bike$Retail_Food_Establishment
+             +bike$POPULATION_SQ_MILE)
+beta_x1 <- summary(model2)$coefficients[2, 1]
+beta_x2 <- summary(model2)$coefficients[3, 1]
+beta_x3 <- summary(model2)$coefficients[4, 1]
+CBD2 <- beta_x1 * bike$Limited_Business_License+
+  beta_x2 * bike$Retail_Food_Establishment+
+  beta_x3 * bike$POPULATION_SQ_MILE
+```
+
+```{r}
+fit_all2 <- lm(bike$trips ~ bike$THEFT+bike$ASSAULT+bike$BURGLARY
+                +CBD1 + CBD2)
+summary(fit_all2)
+par(mfrow=c(2,2))
+plot(fit_all2)
+```
+Take all the nine crime variables into consideration, only Theft, Deceptive_practice, Assault, Burglary, and Robbery seems to be significant. Further, we created two composite variables to explore the effects of population density and transportation on bike demand. However, the current R square value is still low. We will continue exploring adding composite variables for the crime effects, and options to adjust variables within the two composite variables already created to make the model more robust.
